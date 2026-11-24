@@ -891,4 +891,4 @@ class _TryOnPageState extends State<TryOnPage> {
     );
   }
 }
-}
+
