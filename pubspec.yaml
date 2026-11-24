@@ -1,0 +1,21 @@
+name: smart_wardrobe
+description: "专属电子衣橱与零付费虚拟试衣 App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  image_picker: ^1.1.2
+  camera: ^0.11.0+2
+  http: ^1.2.2
+  image: ^4.3.0
+
+flutter:
+  uses-material-design: true
