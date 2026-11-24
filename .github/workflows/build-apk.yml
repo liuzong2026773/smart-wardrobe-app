@@ -30,12 +30,12 @@ jobs:
             exit 0
           fi
 
-      - name: Set up Java 17
+      - name: Set up Java 21
         if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Flutter (stable)
         if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
