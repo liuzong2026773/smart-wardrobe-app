@@ -1,0 +1,108 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Auto-unpack smart_wardrobe_app.zip if present
+        run: |
+          if [ -f "smart_wardrobe_app.zip" ]; then
+            unzip -o smart_wardrobe_app.zip -d _tmp_unpack
+            cp -r _tmp_unpack/smart_wardrobe_app/* .
+            rm -rf _tmp_unpack
+          fi
+
+      - name: Verify pubspec exists
+        run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "等待上传 smart_wardrobe_app.zip 源码包后自动构建 APK"
+            exit 0
+          fi
+
+      - name: Set up Java 17
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter (stable)
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Generate native Android & iOS project scaffolding
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        run: |
+          flutter create . --project-name smart_wardrobe --org com.personal.wardrobe --platforms android,ios --overwrite=false || true
+          if [ ! -d "android" ]; then
+            flutter create . --project-name smart_wardrobe --org com.personal.wardrobe --platforms android,ios
+          fi
+
+      - name: Configure Android permissions and minSdk
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        run: |
+          python3 - << 'PY'
+          from pathlib import Path
+          import re
+
+          manifest_path = Path("android/app/src/main/AndroidManifest.xml")
+          if manifest_path.exists():
+              m = manifest_path.read_text(encoding="utf-8")
+              perms = [
+                  '<uses-permission android:name="android.permission.INTERNET"/>',
+                  '<uses-permission android:name="android.permission.CAMERA"/>',
+                  '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>',
+                  '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>',
+                  '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>',
+              ]
+              insert = "\n    ".join(p for p in perms if p not in m)
+              if insert:
+                  m = m.replace("<application", f"    {insert}\n    <application", 1)
+              m = re.sub(r'android:label="[^"]*"', 'android:label="专属衣橱"', m, count=1)
+              manifest_path.write_text(m, encoding="utf-8")
+
+          for gradle_file in [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]:
+              if gradle_file.exists():
+                  g = gradle_file.read_text(encoding="utf-8")
+                  g = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 24', g)
+                  g = re.sub(r'minSdkVersion\s+flutter\.minSdkVersion', 'minSdkVersion 24', g)
+                  gradle_file.write_text(g, encoding="utf-8")
+          PY
+
+      - name: Install dependencies & Build Release APK
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Upload APK Artifact
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-wardrobe-android-apk
+          path: build/app/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: Publish Latest Release APK
+        if: hashFiles('pubspec.yaml') != '' || hashFiles('smart_wardrobe_app.zip') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-latest
+          name: "专属衣橱 Android 最新版 APK"
+          body: "由 GitHub Actions 自动编译（兼容 Android 16），手机直接点击下方 app-release.apk 下载安装。"
+          files: build/app/outputs/apk/release/app-release.apk
+          make_latest: true
